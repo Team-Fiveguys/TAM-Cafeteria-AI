@@ -1,12 +1,17 @@
 from flask import Flask, request, jsonify
+from joblib import load
 
 app = Flask(__name__)
 
-# 예시 예측 모델 함수
+# 예측 모델 함수
 def predict_model(something):
     # 여기 모델 구현 or 연결
     result = something
     return result
+
+@app.route('/')
+def hello_world():
+  return 'Hello,  My name is UMP. I have BIG muscle. I am strong man HA!HA!HA!'
 
 @app.route('/predict', methods=['POST'])
 def predict():
