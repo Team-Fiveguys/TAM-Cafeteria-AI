@@ -7,6 +7,9 @@ from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
 
 app = Flask(__name__)
 
+# joblib 파일로부터 모델 불러오기
+model = load('tam.joblib')
+
 #데이터 전처리 후 예측하는 함수
 def preprocess_and_predict(new_data):
     """
@@ -45,15 +48,12 @@ def preprocess_and_predict(new_data):
 
     return y_pred
 
-#json 데이터를 리스트로 변경하는 함수
-def convert_json_to_list(json_data):
-    # JSON 데이터의 값들만 리스트로 추출
-    data_list = list(json_data.values())
-    return data_list
+# JSON 데이터를 DataFrame으로 변환하는 함수로 변경
+def convert_json_to_dataframe(json_data):
+    # JSON 데이터를 DataFrame으로 변환
+    data_df = pd.DataFrame([json_data])
+    return data_df
 
-
-# joblib 파일로부터 모델 불러오기
-model = load('tam.joblib')
 
 @app.route('/')
 def hello_world():
@@ -64,12 +64,12 @@ def predict():
     # 클라이언트로부터 변수를 받습니다.
     data = request.get_json(force=True)
     #json데이터를 리스트 형태로 변환
-    list_data = convert_json_to_list(data)
+    dataframe_data = convert_json_to_dataframe(data)
     #리스트 데이터를 모델에 입력하고 예측값 반환
-    predict_result = preprocess_and_predict(list_data)
+    predict_result = preprocess_and_predict(dataframe_data)
 
-    # 예측 결과를 클라이언트에게 반환
-    return jsonify(predict_result=predict_result)
+     # 예측 결과를 클라이언트에게 반환 (NumPy 배열을 리스트로 변환)
+    return jsonify(predict_result=predict_result.tolist())
 
 if __name__ == '__main__':
     app.run(debug=True)
