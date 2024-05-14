@@ -71,5 +71,29 @@ def predict():
      # 예측 결과를 클라이언트에게 반환 (NumPy 배열을 리스트로 변환)
     return jsonify(predict_result=predict_result.tolist())
 
+@app.route('/test', methods=['GET', 'POST'])
+def test():
+    if request.method == 'POST':
+        # form 데이터를 받습니다.
+        data = request.form.to_dict()
+        # form 데이터에서 value 값만을 리스트로 추출하여 새로운 사전 데이터로 구성
+        data = {k: [v] for k, v in data.items()}
+        # 사전 데이터를 DataFrame으로 변환
+        dataframe_data = pd.DataFrame.from_dict(data)
+        # DataFrame 데이터를 모델에 입력하고 예측값 반환
+        predict_result = preprocess_and_predict(dataframe_data)
+        # 예측 결과를 클라이언트에게 반환
+        return jsonify(predict_result=predict_result.tolist())
+    else:
+        # GET 요청시에는 예측을 위한 HTML 폼을 표시
+        return '''
+            <form method="post">
+                요일: <input type="text" name="요일"><br>
+                분류메뉴: <input type="text" name="분류메뉴"><br>
+                학관분류메뉴: <input type="text" name="학관분류메뉴"><br>
+                <input type="submit" value="예측하기">
+            </form>
+        '''
+
 if __name__ == '__main__':
     app.run(debug=True)
