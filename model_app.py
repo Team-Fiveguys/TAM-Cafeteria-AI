@@ -40,13 +40,32 @@ def predict():
     try:
         # 클라이언트로부터 변수를 받습니다.
         data = request.get_json(force=True)
-        print(data)
+        #print(data)
         #json데이터를 리스트 형태로 변환
         dataframe_data = convert_json_to_dataframe(data)
-        print(dataframe_data)
+        #print(dataframe_data)
         #리스트 데이터를 모델에 입력하고 예측값 반환
         predict_result = preprocess_and_predict(dataframe_data)
-        print(predict_result)
+        #print(predict_result)
+
+        # 예측 결과를 클라이언트에게 반환
+        return jsonify(predict_result=predict_result.tolist())
+    except Exception as e:
+        print(f"예측 요청 처리 중 오류 발생: {e}")
+        return jsonify(error=str(e)), 500
+    
+@app.route('/test', methods=['POST'])
+def predict():
+    try:
+        # 클라이언트로부터 변수를 받습니다.
+        data = request.get_json(force=True)
+        #print(data)
+        #json데이터를 리스트 형태로 변환
+        dataframe_data = convert_json_to_dataframe(data)
+        #print(dataframe_data)
+        #리스트 데이터를 모델에 입력하고 예측값 반환
+        predict_result = preprocess_and_predict(dataframe_data)
+        #print(predict_result)
 
         # 예측 결과를 클라이언트에게 반환
         return jsonify(predict_result=predict_result.tolist())
