@@ -4,6 +4,18 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, MinMaxScaler
+import pymysql
+
+# RDS 인스턴스 정보
+endpoint = 'tamdb.cfk0ie0wc7k6.ap-northeast-2.rds.amazonaws.com'
+username = 'root'
+password = 'rang60192185'
+database_name = 'tamdb'
+
+def get_db_connection():
+    """데이터베이스 연결 반환"""
+    connection = pymysql.connect(host=endpoint, user=username, passwd=password, db=database_name)
+    return connection
 
 app = Flask(__name__)
 
@@ -33,20 +45,17 @@ def convert_json_to_dataframe(json_data):
 
 @app.route('/')
 def hello_world():
-    return 'Hello,  My name is EOM. I have BIG muscle. I am strong man HA!HA!HA!'
+    return 'Hello,  My name is UMP. I am strong man'
 
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
         # 클라이언트로부터 변수를 받습니다.
         data = request.get_json(force=True)
-        #print(data)
         #json데이터를 리스트 형태로 변환
         dataframe_data = convert_json_to_dataframe(data)
-        #print(dataframe_data)
         #리스트 데이터를 모델에 입력하고 예측값 반환
         predict_result = preprocess_and_predict(dataframe_data)
-        #print(predict_result)
 
         # 예측 결과를 클라이언트에게 반환
         return jsonify(predict_result=predict_result.tolist())
@@ -55,17 +64,17 @@ def predict():
         return jsonify(error=str(e)), 500
     
 @app.route('/test', methods=['POST'])
-def predict():
+def test():
     try:
         # 클라이언트로부터 변수를 받습니다.
         data = request.get_json(force=True)
-        #print(data)
+        print(data)
         #json데이터를 리스트 형태로 변환
         dataframe_data = convert_json_to_dataframe(data)
-        #print(dataframe_data)
+        print(dataframe_data)
         #리스트 데이터를 모델에 입력하고 예측값 반환
         predict_result = preprocess_and_predict(dataframe_data)
-        #print(predict_result)
+        print(predict_result)
 
         # 예측 결과를 클라이언트에게 반환
         return jsonify(predict_result=predict_result.tolist())
