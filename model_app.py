@@ -8,7 +8,8 @@ import pymysql
 import pathlib
 import textwrap
 import google.generativeai as genai
-import datetime
+from datetime import datetime, timedelta
+import holidays
 
 
 # RDS 인스턴스 정보
@@ -67,12 +68,26 @@ def get_menu_name(local_date, cafeteria_id):
 
 #날짜 받아 요일 반환
 def get_weekday(date_string):
-    date_object = datetime.datetime.strptime(date_string, '%Y-%m-%d')
+    date_object = datetime.strptime(date_string, '%Y-%m-%d')
     # 요일을 숫자로 반환 (월요일=0, 일요일=6)
     weekday_number = date_object.weekday()
     # 숫자를 요일 이름으로 변환
     days = ["월", "화", "수", "목", "금", "토", "일"]
     return days[weekday_number]
+
+#학기번호 계산을 위한 함수
+def calculate_semester_number(local_date_str):
+    start_date = datetime(2023, 3, 1)  # 기준 시작 날짜
+    local_date = datetime.strptime(local_date_str, "%Y-%m-%d")  # 입력받은 날짜
+    
+    # 시작 날짜와 입력 날짜의 차이(달 기준)
+    month_diff = (local_date.year - start_date.year) * 12 + (local_date.month - start_date.month)
+    
+    # 학기 번호 계산
+    # 6개월마다 학기 번호가 1씩 증가
+    semester_number = 1 + month_diff // 6
+    
+    return semester_number
 
 #json데이터를 모델에 입력하기 전 필요한 변수들을 채워주는 함수
 def fill_data(data):
@@ -86,28 +101,45 @@ def fill_data(data):
     }
     # 요일에 따른 평균 식수 값을 가져옴.
     avg_meals = day_avg_meals.get(data.get("요일"), 500)
+     # 주차에 따라 시험기간을 설정
+    week = data.get("week", 0)
+    exam_period = 1 if week in [7, 8, 14, 15] else 0
+
+    # 한국 공휴일 설정
+    kr_holidays = holidays.KR()
+    # local_date 가져오기
+    local_date = datetime.strptime(data.get("local_date"), "%Y-%m-%d")
+    # 휴일 전날, 휴일 다음날, 연휴 전날, 연휴 다음날 설정
+    prev_day = local_date - timedelta(days=1)
+    next_day = local_date + timedelta(days=1)
+    day_before_prev = prev_day - timedelta(days=1)
+    day_after_next = next_day + timedelta(days=1)
+    is_prev_day_holiday = prev_day in kr_holidays
+    is_next_day_holiday = next_day in kr_holidays
+    is_day_before_prev_holiday = day_before_prev in kr_holidays
+    is_day_after_next_holiday = day_after_next in kr_holidays
 
     filled_data = {
         "요일": get_weekday(data.get("local_date")),
         "전주 식수": 500,
         "요일 평균 식수": avg_meals,
-        "시험기간": data.get("exam", 0),
+        "시험기간": exam_period,
         "축제유무": data.get("festival", 0),
         "간식배부": data.get("snack", 0),
         "예비군유무": data.get("reservist", 0),
-        "분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), data.get("cafeteria_id"))),
-        "주차": 11, #localdate에서 계산
-        "학관분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 2)), #학관 id=2
+        "분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 1)), #명진당 id:1
+        "주차": data.get("week", 0),
+        "학관분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 2)), #학관 id:2
         "방학유무": data.get("vacation", 0),
-        "개강주": 0, #주차에서 계산
-        "종강주": 0, #주차에서 계산
+        "개강주": 1 if data.get("week") == 1 else 0,
+        "종강주": 1 if data.get("week") == 15 else 0,
         "시험끝목금": 0, 
         "공휴일유무": data.get("holiday", 0),
-        "학기번호": 3,
-        "휴일 전날": 0,
-        "휴일 다음날": 0,
-        "연휴 전날": 0,
-        "연휴 다음날": 0,
+        "학기번호": calculate_semester_number(data.get("local_date")),
+        "휴일 전날": 1 if is_prev_day_holiday else 0,
+        "휴일 다음날": 1 if is_next_day_holiday else 0,
+        "연휴 전날": 1 if is_day_before_prev_holiday else 0,
+        "연휴 다음날": 1 if is_day_after_next_holiday else 0,
         "매움": data.get("spicy", 0)
     }
     return filled_data
@@ -141,7 +173,7 @@ def convert_json_to_dataframe(json_data):
 def hello_world():
     return 'UMP is strong man.'
 
-@app.route('/predict', methods=['POST'])
+@app.route('/predict1', methods=['POST'])
 def predict():
     try:
         # 클라이언트로부터 변수를 받습니다.
