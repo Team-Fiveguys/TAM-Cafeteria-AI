@@ -8,7 +8,7 @@ import pymysql
 import pathlib
 import textwrap
 import google.generativeai as genai
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 import holidays
 
 
@@ -75,6 +75,29 @@ def get_weekday(date_string):
     days = ["월", "화", "수", "목", "금", "토", "일"]
     return days[weekday_number]
 
+# 날짜와 학기번호 입력받아 주차를 계산하는 함수
+def calculate_week(local_date_str, semester_number):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            # semester_number에 해당하는 start_date 가져오기
+            sql_semester = "SELECT start_date FROM semester WHERE semester_num = %s"
+            cursor.execute(sql_semester, (semester_number,))
+            start_date = cursor.fetchone()
+            if start_date:
+                start_date = start_date[0]
+                # start_date가 datetime.date 객체일 경우 문자열로 변환
+                if isinstance(start_date, date):
+                    start_date = start_date.strftime('%Y-%m-%d')
+                start_date = datetime.strptime(start_date, '%Y-%m-%d')
+                
+                local_date = datetime.strptime(local_date_str, "%Y-%m-%d")
+                week_number = (local_date - start_date).days // 7 + 1
+                return week_number
+    finally:
+        connection.close()
+    return 0
+
 #학기번호 계산을 위한 함수
 def calculate_semester_number(local_date_str):
     start_date = datetime(2023, 3, 1)  # 기준 시작 날짜
@@ -101,8 +124,15 @@ def fill_data(data):
     }
     # 요일에 따른 평균 식수 값을 가져옴.
     avg_meals = day_avg_meals.get(data.get("요일"), 500)
-     # 주차에 따라 시험기간을 설정
-    week = data.get("week", 0)
+    
+    # local_date 가져오기
+    local_date_str = data.get("local_date")
+    local_date = datetime.strptime(local_date_str, "%Y-%m-%d")
+    # 학기 번호 계산
+    semester_number = calculate_semester_number(local_date_str)
+    # 주차 계산
+    week = calculate_week(local_date_str, semester_number)
+    
     exam_period = 1 if week in [7, 8, 14, 15] else 0
 
     # 한국 공휴일 설정
@@ -114,10 +144,12 @@ def fill_data(data):
     next_day = local_date + timedelta(days=1)
     day_before_prev = prev_day - timedelta(days=1)
     day_after_next = next_day + timedelta(days=1)
+    is_local_date_holiday = local_date in kr_holidays
     is_prev_day_holiday = prev_day in kr_holidays
     is_next_day_holiday = next_day in kr_holidays
     is_day_before_prev_holiday = day_before_prev in kr_holidays
     is_day_after_next_holiday = day_after_next in kr_holidays
+    
 
     filled_data = {
         "요일": get_weekday(data.get("local_date")),
@@ -128,13 +160,13 @@ def fill_data(data):
         "간식배부": data.get("snack", 0),
         "예비군유무": data.get("reservist", 0),
         "분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 1)), #명진당 id:1
-        "주차": data.get("week", 0),
+        "주차": week,
         "학관분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 2)), #학관 id:2
-        "방학유무": data.get("vacation", 0),
+        "방학유무": 0,
         "개강주": 1 if data.get("week") == 1 else 0,
         "종강주": 1 if data.get("week") == 15 else 0,
         "시험끝목금": 0, 
-        "공휴일유무": data.get("holiday", 0),
+        "공휴일유무":  1 if is_local_date_holiday else 0,
         "학기번호": calculate_semester_number(data.get("local_date")),
         "휴일 전날": 1 if is_prev_day_holiday else 0,
         "휴일 다음날": 1 if is_next_day_holiday else 0,
@@ -143,8 +175,6 @@ def fill_data(data):
         "매움": data.get("spicy", 0)
     }
     return filled_data
-
-app = Flask(__name__)
 
 def preprocess_and_predict(new_data):
     try:
@@ -169,6 +199,8 @@ def convert_json_to_dataframe(json_data):
         print(f"데이터 변환 중 오류 발생: {e}")
         raise
 
+app = Flask(__name__)
+
 @app.route('/')
 def hello_world():
     return 'UMP is strong man.'
@@ -190,37 +222,59 @@ def predict():
         print(f"예측 요청 처리 중 오류 발생: {e}")
         return jsonify(error=str(e)), 500
     
-@app.route('/predict_test', methods=['POST'])
-def test():
+@app.route('/add_semester', methods=['POST'])
+def add_semester():
     try:
         # 클라이언트로부터 변수를 받습니다.
         data = request.get_json(force=True)
-        print(data)
-        #json데이터를 리스트 형태로 변환
-        dataframe_data = convert_json_to_dataframe(data)
-        print(dataframe_data)
-        #리스트 데이터를 모델에 입력하고 예측값 반환
-        predict_result = preprocess_and_predict(dataframe_data)
-        print(predict_result)
-        # 예측 결과를 클라이언트에게 반환
-        return jsonify(predict_result=predict_result.tolist())
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        semester_num = calculate_semester_number(data.get("start_date"))
+
+        # 데이터베이스 연결
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # SQL 쿼리 작성
+        query = """
+        INSERT INTO semester (start_date, end_date, semester_num)
+        VALUES (%s, %s, %s)
+        """
+        cursor.execute(query, (start_date, end_date, semester_num))
+        connection.commit()
+
+        # 연결 종료
+        cursor.close()
+        connection.close()
+
+        return jsonify(message="Semester data added successfully."), 200
     except Exception as e:
-        print(f"예측 요청 처리 중 오류 발생: {e}")
+        print(f"학기 데이터 추가 중 오류 발생: {e}")
         return jsonify(error=str(e)), 500
 
-@app.route('/find_category', methods=['POST'])
-def find_category():
-    """클라이언트로부터 메뉴 이름을 받아 가장 비슷한 카테고리를 찾아 반환합니다."""
-    data = request.get_json(force=True)
-    menu_name = data.get('menu_name')
-    
-    if not menu_name:
-        return jsonify(error="menu_name is required"), 400
-    
+@app.route('/start_date', methods=['GET'])
+def get_start_date():
     try:
-        similar_category = get_similar_category(menu_name)
-        return jsonify(similar_category=similar_category)
+        # 데이터베이스 연결
+        connection = get_db_connection()
+        cursor = connection.cursor()
+
+        # SQL 쿼리 작성
+        query = "SELECT start_date FROM semester"
+        cursor.execute(query)
+        results = cursor.fetchall()
+
+        # 결과를 리스트로 변환 및 YYYY-MM-DD 형식으로 포맷팅
+        start_date = [row[0].strftime('%Y-%m-%d') for row in results]
+
+        # 연결 종료
+        cursor.close()
+        connection.close()
+
+        # JSON 응답 반환
+        return jsonify(start_date=start_date), 200
     except Exception as e:
+        print(f"start_date 조회 중 오류 발생: {e}")
         return jsonify(error=str(e)), 500
 
 if __name__ == '__main__':
