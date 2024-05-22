@@ -98,6 +98,33 @@ def calculate_week(local_date_str, semester_number):
         connection.close()
     return 0
 
+def get_previous_week_headcount(local_date_str):
+    # 문자열 형식의 날짜를 datetime 객체로 변환
+    local_date = datetime.strptime(local_date_str, "%Y-%m-%d")
+    # 일주일 전 날짜 계산
+    previous_week_date = local_date - timedelta(days=7)
+    # 날짜를 문자열 형식으로 다시 변환
+    previous_week_date_str = previous_week_date.strftime("%Y-%m-%d")
+    
+    # 데이터베이스 연결
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            # 일주일 전 날짜에 해당하는 count1 값을 조회하는 쿼리
+            query = """
+                    SELECT count1 
+                    FROM headcount_data 
+                    WHERE date = %s
+                    """
+            cursor.execute(query, (previous_week_date_str,))
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            else:
+                return None
+    finally:
+        connection.close()
+
 #학기번호 계산을 위한 함수
 def calculate_semester_number(local_date_str):
     start_date = datetime(2023, 3, 1)  # 기준 시작 날짜
@@ -144,16 +171,18 @@ def fill_data(data):
     next_day = local_date + timedelta(days=1)
     day_before_prev = prev_day - timedelta(days=1)
     day_after_next = next_day + timedelta(days=1)
+
     is_local_date_holiday = local_date in kr_holidays
     is_prev_day_holiday = prev_day in kr_holidays
     is_next_day_holiday = next_day in kr_holidays
     is_day_before_prev_holiday = day_before_prev in kr_holidays
     is_day_after_next_holiday = day_after_next in kr_holidays
     
+    weekday = get_weekday(data.get("local_date"))
 
     filled_data = {
-        "요일": get_weekday(data.get("local_date")),
-        "전주 식수": 500,
+        "요일": weekday,
+        "전주 식수": get_previous_week_headcount(data.get("local_date")),
         "요일 평균 식수": avg_meals,
         "시험기간": exam_period,
         "축제유무": data.get("festival", 0),
@@ -163,9 +192,9 @@ def fill_data(data):
         "주차": week,
         "학관분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 2)), #학관 id:2
         "방학유무": 0,
-        "개강주": 1 if data.get("week") == 1 else 0,
-        "종강주": 1 if data.get("week") == 15 else 0,
-        "시험끝목금": 0, 
+        "개강주": 1 if week == 1 else 0,
+        "종강주": 1 if week == 15 else 0,
+        "시험끝목금": 1 if exam_period == 1 and weekday in ["목", "금"] else 0,
         "공휴일유무":  1 if is_local_date_holiday else 0,
         "학기번호": calculate_semester_number(data.get("local_date")),
         "휴일 전날": 1 if is_prev_day_holiday else 0,
