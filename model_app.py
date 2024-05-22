@@ -245,8 +245,9 @@ def predict():
         dataframe_data = convert_json_to_dataframe(filled_data)
         #리스트 데이터를 모델에 입력하고 예측값 반환
         predict_result = preprocess_and_predict(dataframe_data)
+        predict_result_int = int(predict_result[0])
         # 예측 결과를 클라이언트에게 반환
-        return jsonify(predict_result=predict_result.tolist())
+        return jsonify(predict_result=predict_result_int)
     except Exception as e:
         print(f"예측 요청 처리 중 오류 발생: {e}")
         return jsonify(error=str(e)), 500
@@ -289,12 +290,12 @@ def get_start_date():
         cursor = connection.cursor()
 
         # SQL 쿼리 작성
-        query = "SELECT start_date FROM semester"
+        query = "SELECT start_date FROM semester LIMIT 1"
         cursor.execute(query)
-        results = cursor.fetchall()
+        result = cursor.fetchone()
 
         # 결과를 리스트로 변환 및 YYYY-MM-DD 형식으로 포맷팅
-        start_date = [row[0].strftime('%Y-%m-%d') for row in results]
+        start_date = result[0].strftime('%Y-%m-%d') if result else None  # 결과가 있으면 포맷팅, 없으면 None
 
         # 연결 종료
         cursor.close()
