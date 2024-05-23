@@ -234,10 +234,12 @@ app = Flask(__name__)
 def hello_world():
     return 'UMP is strong man.'
 
+#서버 체크
 @app.route('/health', methods=['GET'])
 def heatlh():
     return jsonify({'status': 'UP'}), 200
 
+#명진당 식수 예측
 @app.route('/predict1', methods=['POST'])
 def predict():
     try:
@@ -256,6 +258,7 @@ def predict():
         print(f"예측 요청 처리 중 오류 발생: {e}")
         return jsonify(error=str(e)), 500
     
+#개강일 추가    
 @app.route('/add_semester', methods=['POST'])
 def add_semester():
     try:
@@ -286,6 +289,7 @@ def add_semester():
         print(f"학기 데이터 추가 중 오류 발생: {e}")
         return jsonify(error=str(e)), 500
 
+#개강일 조회
 @app.route('/start_date', methods=['GET'])
 def get_start_date():
     try:
@@ -310,6 +314,54 @@ def get_start_date():
     except Exception as e:
         print(f"start_date 조회 중 오류 발생: {e}")
         return jsonify(error=str(e)), 500
+
+#실제 식수 저장
+@app.route('/headcount', methods=['POST'])
+def post_headcount():
+    # 클라이언트로부터 데이터를 받음
+    data = request.get_json()
+    local_date = data.get('local_date')
+    cafeteria_id = data.get('cafeteria_id')
+    headcount = data.get('headcount')
+
+    # 데이터베이스 연결
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # 입력 받은 local_date에 해당하는 row가 있는지 확인
+            sql = "SELECT EXISTS(SELECT * FROM headcount_data WHERE date = %s)"
+            cursor.execute(sql, (local_date,))
+            exists = cursor.fetchone()[0]
+
+            if exists:
+                # cafeteria_id에 따라 count1 또는 count2에 headcount를 저장
+                if cafeteria_id == 1:
+                    update_sql = "UPDATE headcount_data SET count1 = %s WHERE date = %s"
+                elif cafeteria_id == 2:
+                    update_sql = "UPDATE headcount_data SET count2 = %s WHERE date = %s"
+                cursor.execute(update_sql, (headcount, local_date))
+            else:
+                # 해당 날짜에 대한 row가 없으면 새로운 row를 생성
+                if cafeteria_id == 1:
+                    insert_sql = "INSERT INTO headcount_data (date, count1) VALUES (%s, %s)"
+                elif cafeteria_id == 2:
+                    insert_sql = "INSERT INTO headcount_data (date, count2) VALUES (%s, %s)"
+                cursor.execute(insert_sql, (local_date, headcount))
+
+            conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({"message": "Headcount data saved successfully"}), 200
+
+"""#실제 식수 조회
+@app.route('/headcount', methods=['GET'])
+def get_headcount():
+    return none
+#실제 식수 수정
+@app.route('/headcount', methods='PUT')
+def put_headcount():
+    return none"""
 
 if __name__ == '__main__':
     app.run(debug=True)
