@@ -234,6 +234,10 @@ app = Flask(__name__)
 def hello_world():
     return 'UMP is strong man.'
 
+@app.route('/health', methods=['GET'])
+def heatlh():
+    return jsonify({'status': 'UP'}), 200
+
 @app.route('/predict1', methods=['POST'])
 def predict():
     try:
