@@ -354,14 +354,43 @@ def post_headcount():
 
     return jsonify({"message": "Headcount data saved successfully"}), 200
 
-"""#실제 식수 조회
+#실제 식수 조회
 @app.route('/headcount', methods=['GET'])
 def get_headcount():
-    return none
-#실제 식수 수정
-@app.route('/headcount', methods='PUT')
-def put_headcount():
-    return none"""
+    # 클라이언트로부터 데이터를 받음
+    data = request.get_json()
+    local_date = data.get('local_date')
+    cafeteria_id = data.get('cafeteria_id')
+
+    # 데이터베이스 연결
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            # cafeteria_id에 따라 적절한 count 값을 조회
+            if cafeteria_id == 1:
+                query_sql = "SELECT count1 FROM headcount_data WHERE date = %s"
+            elif cafeteria_id == 2:
+                query_sql = "SELECT count2 FROM headcount_data WHERE date = %s"
+            else:
+                return jsonify({"error": "Invalid cafeteria_id"}), 400
+
+            cursor.execute(query_sql, (local_date,))
+            row = cursor.fetchone()
+            
+            # 조회된 데이터가 없는 경우
+            if row is None:
+                return jsonify({"error": "Data not found"}), 404
+
+            # 조회된 데이터가 있는 경우
+            data = {
+                "headcount": row[0]  # count1 또는 count2
+            }
+
+            return jsonify(data), 200
+    finally:
+        conn.close()
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
