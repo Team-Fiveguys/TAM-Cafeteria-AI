@@ -11,6 +11,7 @@ import textwrap
 import google.generativeai as genai
 from datetime import datetime, date, timedelta
 import holidays
+import json
 
 
 # RDS 인스턴스 정보
@@ -166,8 +167,8 @@ def fill_data(data):
     }
 
     # 요일에 따른 평균 식수 값을 가져옴.
-    avg_meals1 = day_avg_meals1.get(data.get("요일"), 500)
-    avg_meals2 = day_avg_meals2.get(data.get("요일"), 500)
+    avg_meals1 = day_avg_meals1.get(get_weekday(data.get("local_date")))
+    avg_meals2 = day_avg_meals2.get(get_weekday(data.get("local_date")))
     # local_date 가져오기
     local_date_str = data.get("local_date")
     local_date = datetime.strptime(local_date_str, "%Y-%m-%d")
@@ -254,7 +255,7 @@ def load_and_predict(new_data, cafeteria_id):
                 predictions = predict_model.predict(new_data)
         
         print("새로운 데이터에 대한 예측 결과:", predictions)  
-
+        print(new_data)
         return predictions
     except Exception as e:
         print(f"예측 중 오류 발생: {e}")
@@ -280,9 +281,10 @@ def hello_world():
 def heatlh():
     return jsonify({'status': 'UP'}), 200
 
-#명진당 식수 예측
+#명진당 식수 예측 및 변수,결과 저장
 @app.route('/predict1', methods=['POST'])
 def predict1():
+    conn = None
     try:
         # 클라이언트로부터 변수를 받습니다.
         data = request.get_json(force=True)
@@ -293,15 +295,34 @@ def predict1():
         #리스트 데이터를 모델에 입력하고 예측값 반환
         predict_result = load_and_predict(dataframe_data, 1)
         predict_result_int = int(predict_result[0])
-        #TODO: 변수와 예측결과 DB에 저장해야함.
-
+        # 데이터베이스 연결
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # JSON 데이터와 예측 결과를 predict 테이블에 저장 (UPSERT)
+            insert_sql = """
+                INSERT INTO predict (date, cafeteria_id, data, predict_result) 
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE 
+                data = VALUES(data), predict_result = VALUES(predict_result)
+            """
+            cursor.execute(insert_sql, (
+                data.get("local_date"), 
+                data.get("cafeteria_id"), 
+                json.dumps(data), 
+                predict_result_int
+            ))
+            conn.commit()
         # 예측 결과를 클라이언트에게 반환
         return jsonify(predict_result=predict_result_int)
     except Exception as e:
         print(f"예측 요청 처리 중 오류 발생: {e}")
         return jsonify(error=str(e)), 500
+    finally:
+        # 데이터베이스 연결 종료
+        if conn is not None:
+            conn.close()
 
-#학생회관 식수 예측
+#학생회관 식수 예측 및 변수,결과 저장
 @app.route('/predict2', methods=['POST'])
 def predict2():
     try:
