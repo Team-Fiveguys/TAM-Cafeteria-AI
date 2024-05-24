@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import joblib
+import pickle
 import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
@@ -27,16 +28,21 @@ def get_db_connection():
     return connection
 
 #메뉴이름 입력 받아 카테고리(메뉴분류) 반환
-def get_similar_category(menu_name):
+def get_similar_category(menu_name, cafeteria_id):
     model = genai.GenerativeModel('gemini-pro')  # 모델 선택
-    response = model.generate_content(f"{menu_name}이 메뉴가 ['육류', '국밥', '돈까스', '전골류', '찌개', '국수', '비빔밥', '맑은국'] 이 메뉴 카테고리 중에서 가장 비슷한 카테고리를 한단어로 말해줘. 카테고리에 있는 것만 대답해.")
     
-    # 결과 텍스트를 Markdown 형식으로 변환합니다.
-    result_text = textwrap.indent(response.text, '> ', predicate=lambda _: True)
+    if cafeteria_id == 1:
+        response = model.generate_content(f"{menu_name}이 메뉴가 ['육류', '국밥', '돈까스', '전골류', '찌개', '국수', '비빔밥', '맑은국'] 이 메뉴 카테고리 중에서 가장 비슷한 카테고리를 한단어로 말해줘. 카테고리에 있는 것만 대답해.")
+        # 결과 텍스트를 Markdown 형식으로 변환합니다.
+        result_text = textwrap.indent(response.text, '> ', predicate=lambda _: True)
+    elif cafeteria_id == 2:
+        response = model.generate_content(f"{menu_name}이 메뉴가 ['육류', '밥류', '돈까스', '비빔밥', '분식류', '면류', '찌개류', '연어', '국밥', '볶음밥'] 이 메뉴 카테고리 중에서 가장 비슷한 카테고리를 한단어로 말해줘. 카테고리에 있는 것만 대답해.")
+        # 결과 텍스트를 Markdown 형식으로 변환합니다.
+        result_text = textwrap.indent(response.text, '> ', predicate=lambda _: True)
     
     return result_text
 
-#날짜와 식당에 해당하는 분류메뉴 이름을 데이터베이스에서 가져옵니다.
+#날짜와 식당에 해당하는 메뉴 이름을 데이터베이스에서 가져옵니다.
 def get_menu_name(local_date, cafeteria_id):
     connection = get_db_connection()
     try:
@@ -98,6 +104,7 @@ def calculate_week(local_date_str, semester_number):
         connection.close()
     return 0
 
+#전주 식수를 불러오는 함수
 def get_previous_week_headcount(local_date_str):
     # 문자열 형식의 날짜를 datetime 객체로 변환
     local_date = datetime.strptime(local_date_str, "%Y-%m-%d")
@@ -141,17 +148,28 @@ def calculate_semester_number(local_date_str):
 
 #json데이터를 모델에 입력하기 전 필요한 변수들을 채워주는 함수
 def fill_data(data):
-    # "요일"에 따른 "요일 평균 식수"를 정의하는 딕셔너리
-    day_avg_meals = {
+    # 명진당 평균 식수 딕셔너리
+    day_avg_meals1 = {
         "월": 495,
         "화": 505,
         "수": 501,
         "목": 462,
-        "금": 261,
+        "금": 261
     }
+    # 학관 평균 식수 딕셔너리
+    day_avg_meals2 = {
+        "월": 522,
+        "화": 528,
+        "수": 495,
+        "목": 435,
+        "금": 218,
+        "토": 150,
+        "일": 154
+    }
+
     # 요일에 따른 평균 식수 값을 가져옴.
-    avg_meals = day_avg_meals.get(data.get("요일"), 500)
-    
+    avg_meals1 = day_avg_meals1.get(data.get("요일"), 500)
+    avg_meals2 = day_avg_meals2.get(data.get("요일"), 500)
     # local_date 가져오기
     local_date_str = data.get("local_date")
     local_date = datetime.strptime(local_date_str, "%Y-%m-%d")
@@ -180,38 +198,63 @@ def fill_data(data):
     
     weekday = get_weekday(data.get("local_date"))
 
-    filled_data = {
-        "요일": weekday,
-        "전주 식수": get_previous_week_headcount(data.get("local_date")),
-        "요일 평균 식수": avg_meals,
-        "시험기간": exam_period,
-        "축제유무": data.get("festival", 0),
-        "간식배부": data.get("snack", 0),
-        "예비군유무": data.get("reservist", 0),
-        "분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 1)), #명진당 id:1
-        "주차": week,
-        "학관분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 2)), #학관 id:2
-        "방학유무": 0,
-        "개강주": 1 if week == 1 else 0,
-        "종강주": 1 if week == 15 else 0,
-        "시험끝목금": 1 if exam_period == 1 and weekday in ["목", "금"] else 0,
-        "공휴일유무":  1 if is_local_date_holiday else 0,
-        "학기번호": calculate_semester_number(data.get("local_date")),
-        "휴일 전날": 1 if is_prev_day_holiday else 0,
-        "휴일 다음날": 1 if is_next_day_holiday else 0,
-        "연휴 전날": 1 if is_day_before_prev_holiday else 0,
-        "연휴 다음날": 1 if is_day_after_next_holiday else 0,
-        "매움": data.get("spicy", 0)
-    }
-    return filled_data
+    cafeteria_id = data.get("cafeteria_id")
 
-def preprocess_and_predict(new_data):
+    # cafeteria_id에 따라 반환할 데이터 구성을 변경
+    if cafeteria_id == 1:
+        filled_data = {
+            "요일": weekday,
+            "전주 식수": get_previous_week_headcount(data.get("local_date")),
+            "요일 평균 식수": avg_meals1,
+            "시험기간": exam_period,
+            "축제유무": data.get("festival", 0),
+            "간식배부": data.get("snack", 0),
+            "예비군유무": data.get("reservist", 0),
+            "분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 1), 1), #명진당 id:1
+            "주차": week,
+            "학관분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 2), 2), #학관 id:2
+            "방학유무": 0,
+            "개강주": 1 if week == 1 else 0,
+            "종강주": 1 if week == 15 else 0,
+            "시험끝목금": 1 if exam_period == 1 and weekday in ["목", "금"] else 0,
+            "공휴일유무":  1 if is_local_date_holiday else 0,
+            "학기번호": calculate_semester_number(data.get("local_date")),
+            "휴일 전날": 1 if is_prev_day_holiday else 0,
+            "휴일 다음날": 1 if is_next_day_holiday else 0,
+            "연휴 전날": 1 if is_day_before_prev_holiday else 0,
+            "연휴 다음날": 1 if is_day_after_next_holiday else 0,
+            "매움": data.get("spicy", 0)
+        }
+        return filled_data
+    elif cafeteria_id == 2:
+        filled_data = {
+            "학관분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 2), 2), #학관 id:2
+            "요일": weekday,
+            "전주 식수": get_previous_week_headcount(data.get("local_date")),
+            "요일 평균 식수": avg_meals2,
+            "명진당분류메뉴": get_similar_category(get_menu_name(data.get("local_date"), 1), 1), #명진당 id:1
+            "학기번호": calculate_semester_number(data.get("local_date")),
+            "휴일 전날": 1 if is_prev_day_holiday else 0,
+            "휴일 다음날": 1 if is_next_day_holiday else 0,
+        }
+               
+        return filled_data
+    else:
+        # 잘못된 cafeteria_id가 주어진 경우를 처리
+        raise ValueError("Invalid cafeteria_id")
+
+#예측 모델을 불러와 예측을 수행하는 함수
+def load_and_predict(new_data, cafeteria_id):
     try:
         # 저장된 모델 불러오기
-        ridge_pipeline = joblib.load('tam.joblib')
-
-        # 예측 수행
-        predictions = ridge_pipeline.predict(new_data)
+        if cafeteria_id == 1:
+            predict_model = joblib.load('tam1.joblib')
+            predictions = predict_model.predict(new_data)
+        elif cafeteria_id == 2:
+            with open('tam2.pkl', 'rb') as file:
+                predict_model = joblib.load(file)
+                predictions = predict_model.predict(new_data)
+        
         print("새로운 데이터에 대한 예측 결과:", predictions)  
 
         return predictions
@@ -241,7 +284,7 @@ def heatlh():
 
 #명진당 식수 예측
 @app.route('/predict1', methods=['POST'])
-def predict():
+def predict1():
     try:
         # 클라이언트로부터 변수를 받습니다.
         data = request.get_json(force=True)
@@ -250,14 +293,33 @@ def predict():
         #json데이터를 리스트 형태로 변환
         dataframe_data = convert_json_to_dataframe(filled_data)
         #리스트 데이터를 모델에 입력하고 예측값 반환
-        predict_result = preprocess_and_predict(dataframe_data)
+        predict_result = load_and_predict(dataframe_data, 1)
         predict_result_int = int(predict_result[0])
         # 예측 결과를 클라이언트에게 반환
         return jsonify(predict_result=predict_result_int)
     except Exception as e:
         print(f"예측 요청 처리 중 오류 발생: {e}")
         return jsonify(error=str(e)), 500
-    
+
+#학생회관 식수 예측
+@app.route('/predict2', methods=['POST'])
+def predict2():
+    try:
+        # 클라이언트로부터 변수를 받습니다.
+        data = request.get_json(force=True)
+        #클라이언트가 입력한 데이터 외의 필요한 데이터 채우기
+        filled_data = fill_data(data)
+        #json데이터를 리스트 형태로 변환
+        dataframe_data = convert_json_to_dataframe(filled_data)
+        #리스트 데이터를 모델에 입력하고 예측값 반환
+        predict_result = load_and_predict(dataframe_data, 2) #학관 예측 모델을 불러오는 함수로 바꿔야 함.
+        predict_result_int = int(predict_result[0])
+        # 예측 결과를 클라이언트에게 반환
+        return jsonify(predict_result=predict_result_int)
+    except Exception as e:
+        print(f"예측 요청 처리 중 오류 발생: {e}")
+        return jsonify(error=str(e)), 500
+
 #개강일 추가    
 @app.route('/add_semester', methods=['POST'])
 def add_semester():
