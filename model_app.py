@@ -293,6 +293,8 @@ def predict1():
         #리스트 데이터를 모델에 입력하고 예측값 반환
         predict_result = load_and_predict(dataframe_data, 1)
         predict_result_int = int(predict_result[0])
+        #TODO: 변수와 예측결과 DB에 저장해야함.
+
         # 예측 결과를 클라이언트에게 반환
         return jsonify(predict_result=predict_result_int)
     except Exception as e:
@@ -416,10 +418,9 @@ def post_headcount():
 #실제 식수 조회
 @app.route('/headcount', methods=['GET'])
 def get_headcount():
-    # 클라이언트로부터 데이터를 받음
-    data = request.get_json()
-    local_date = data.get('local_date')
-    cafeteria_id = data.get('cafeteria_id')
+    # 쿼리 파라미터로부터 데이터를 받음
+    local_date = request.args.get('local_date')
+    cafeteria_id = request.args.get('cafeteria_id', type=int)  # 기본적으로 str이므로, int로 타입 변환
 
     # 데이터베이스 연결
     conn = get_db_connection()
