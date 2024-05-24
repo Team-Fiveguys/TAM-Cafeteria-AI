@@ -325,7 +325,6 @@ def add_semester():
         # 클라이언트로부터 변수를 받습니다.
         data = request.get_json(force=True)
         start_date = data.get('start_date')
-        end_date = data.get('end_date')
         semester_num = calculate_semester_number(data.get("start_date"))
 
         # 데이터베이스 연결
@@ -334,10 +333,10 @@ def add_semester():
         
         # SQL 쿼리 작성
         query = """
-        INSERT INTO semester (start_date, end_date, semester_num)
-        VALUES (%s, %s, %s)
+        INSERT INTO semester (start_date, semester_num)
+        VALUES (%s, %s)
         """
-        cursor.execute(query, (start_date, end_date, semester_num))
+        cursor.execute(query, (start_date, semester_num))
         connection.commit()
 
         # 연결 종료
