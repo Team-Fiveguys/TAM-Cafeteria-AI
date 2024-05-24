@@ -33,13 +33,11 @@ def get_similar_category(menu_name, cafeteria_id):
     
     if cafeteria_id == 1:
         response = model.generate_content(f"{menu_name}이 메뉴가 ['육류', '국밥', '돈까스', '전골류', '찌개', '국수', '비빔밥', '맑은국'] 이 메뉴 카테고리 중에서 가장 비슷한 카테고리를 한단어로 말해줘. 카테고리에 있는 것만 대답해.")
-        # 결과 텍스트를 Markdown 형식으로 변환합니다.
-        result_text = textwrap.indent(response.text, '> ', predicate=lambda _: True)
+        
     elif cafeteria_id == 2:
         response = model.generate_content(f"{menu_name}이 메뉴가 ['육류', '밥류', '돈까스', '비빔밥', '분식류', '면류', '찌개류', '연어', '국밥', '볶음밥'] 이 메뉴 카테고리 중에서 가장 비슷한 카테고리를 한단어로 말해줘. 카테고리에 있는 것만 대답해.")
-        # 결과 텍스트를 Markdown 형식으로 변환합니다.
-        result_text = textwrap.indent(response.text, '> ', predicate=lambda _: True)
-    
+        
+    result_text = response.text.strip()
     return result_text
 
 #날짜와 식당에 해당하는 메뉴 이름을 데이터베이스에서 가져옵니다.
