@@ -281,24 +281,24 @@ def hello_world():
 def heatlh():
     return jsonify({'status': 'UP'}), 200
 
-#명진당 식수 예측 및 변수,결과 저장
+
 @app.route('/predict1', methods=['POST'])
 def predict1():
     conn = None
     try:
         # 클라이언트로부터 변수를 받습니다.
         data = request.get_json(force=True)
-        #클라이언트가 입력한 데이터 외의 필요한 데이터 채우기
+        # 클라이언트가 입력한 데이터 외의 필요한 데이터 채우기
         filled_data = fill_data(data)
-        #json데이터를 리스트 형태로 변환
+        # json 데이터를 리스트 형태로 변환
         dataframe_data = convert_json_to_dataframe(filled_data)
-        #리스트 데이터를 모델에 입력하고 예측값 반환
+        # 리스트 데이터를 모델에 입력하고 예측값 반환
         predict_result = load_and_predict(dataframe_data, 1)
         predict_result_int = int(predict_result[0])
         # 데이터베이스 연결
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            # JSON 데이터와 예측 결과를 predict 테이블에 저장 (UPSERT)
+            # JSON 데이터와 예측 결과를 predict 테이블에 저장
             insert_sql = """
                 INSERT INTO predict (date, cafeteria_id, data, predict_result) 
                 VALUES (%s, %s, %s, %s)
@@ -326,6 +326,7 @@ def predict1():
 @app.route('/predict2', methods=['POST'])
 def predict2():
     try:
+        conn = None
         # 클라이언트로부터 변수를 받습니다.
         data = request.get_json(force=True)
         #클라이언트가 입력한 데이터 외의 필요한 데이터 채우기
@@ -335,11 +336,32 @@ def predict2():
         #리스트 데이터를 모델에 입력하고 예측값 반환
         predict_result = load_and_predict(dataframe_data, 2) #학관 예측 모델을 불러오는 함수로 바꿔야 함.
         predict_result_int = int(predict_result[0])
+        # 데이터베이스 연결
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # JSON 데이터와 예측 결과를 predict 테이블에 저장
+            insert_sql = """
+                INSERT INTO predict (date, cafeteria_id, data, predict_result) 
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE 
+                data = VALUES(data), predict_result = VALUES(predict_result)
+            """
+            cursor.execute(insert_sql, (
+                data.get("local_date"), 
+                data.get("cafeteria_id"), 
+                json.dumps(data), 
+                predict_result_int
+            ))
+            conn.commit()
         # 예측 결과를 클라이언트에게 반환
         return jsonify(predict_result=predict_result_int)
     except Exception as e:
         print(f"예측 요청 처리 중 오류 발생: {e}")
         return jsonify(error=str(e)), 500
+    finally:
+        # 데이터베이스 연결 종료
+        if conn is not None:
+            conn.close()
 
 #개강일 추가    
 @app.route('/add_semester', methods=['POST'])
