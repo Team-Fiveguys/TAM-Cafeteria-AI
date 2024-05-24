@@ -463,7 +463,7 @@ def post_headcount():
 def get_headcount():
     # 쿼리 파라미터로부터 데이터를 받음
     local_date = request.args.get('local_date')
-    cafeteria_id = request.args.get('cafeteria_id', type=int)  # 기본적으로 str이므로, int로 타입 변환
+    cafeteria_id = request.args.get('cafeteria_id', type=int)
 
     # 데이터베이스 연결
     conn = get_db_connection()
@@ -493,7 +493,38 @@ def get_headcount():
     finally:
         conn.close()
 
+#예측 변수 및 결과 조회
+@app.route('/predict', methods=['GET'])
+def get_predict_data():
+    # 쿼리 파라미터로부터 데이터를 받음
+    local_date = request.args.get('local_date')
+    cafeteria_id = request.args.get('cafeteria_id', type=int)
 
+    # 데이터베이스 연결
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            query_sql = """
+                SELECT data, predict_result 
+                FROM predict 
+                WHERE date = %s AND cafeteria_id = %s
+            """
+            cursor.execute(query_sql, (local_date, cafeteria_id))
+            row = cursor.fetchone()
+            
+            # 조회된 데이터가 없는 경우
+            if row is None:
+                return jsonify({"error": "Data not found"}), 404
+
+            # 조회된 데이터가 있는 경우
+            data = {
+                "data": row[0],
+                "predict_result": row[1]
+            }
+
+            return jsonify(data), 200
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     app.run(debug=True)
