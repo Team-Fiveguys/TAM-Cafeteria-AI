@@ -15,9 +15,9 @@ import json
 
 
 # RDS 인스턴스 정보
-endpoint = 'tamdb.cfk0ie0wc7k6.ap-northeast-2.rds.amazonaws.com'
-username = 'root'
-password = 'rang60192185'
+endpoint = 'tamdb-release.cfk0ie0wc7k6.ap-northeast-2.rds.amazonaws.com'
+username = 'fiveGuys'
+password = 'midqyn-racjEx-nofmo2'
 database_name = 'tam'
 # Google API 키를 설정합니다.
 GOOGLE_API_KEY = 'AIzaSyC9MEXmFms89O1p9nrX2Mb53rYg-ua7k54'
