@@ -12,15 +12,19 @@ import google.generativeai as genai
 from datetime import datetime, date, timedelta
 import holidays
 import json
+from config import GOOGLE_API_KEY
+from config import db_endpoint
+from config import db_username
+from config import db_password
+from config import db_name
 
 
 # RDS 인스턴스 정보
-endpoint = 'tamdb-release.cfk0ie0wc7k6.ap-northeast-2.rds.amazonaws.com'
-username = 'fiveGuys'
-password = 'midqyn-racjEx-nofmo2'
-database_name = 'tam'
+endpoint = db_endpoint
+username = db_username
+password = db_password
+database_name = db_name
 # Google API 키를 설정합니다.
-GOOGLE_API_KEY = 'AIzaSyC9MEXmFms89O1p9nrX2Mb53rYg-ua7k54'
 genai.configure(api_key=GOOGLE_API_KEY)
 
 #데이터베이스 연결 반환
